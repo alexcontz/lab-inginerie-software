@@ -51,5 +51,58 @@ public class Main {
         System.out.println("=== Informatii finale despre Scoala ===");
         System.out.println("Numar clase: " + scoala.getNumarClase());
         System.out.println("Total elevi in toate clasele: " + scoala.getTotalElevi());
+        System.out.println();
+
+        System.out.println("==========================================");
+        System.out.println("=== TESTARE ACTIVITATI EXTRACURRICULARE ===");
+        System.out.println("==========================================");
+
+        Profesor profInfo = new Profesor("Popa Cristina", "Informatica");
+        Profesor profSport = new Profesor("Ionescu Dan", "Educatie Fizica");
+        Profesor profMuzica = new Profesor("Radulescu Carmen", "Muzica");
+        Profesor profDesen = new Profesor("Enache Mihai", "Arte Vizuale");
+
+        Activitate actProgramare = new Activitate("Programare", profInfo);
+        Activitate actFotbal = new Activitate("Fotbal", profSport);
+        Activitate actCor = new Activitate("Cor", profMuzica);
+        Activitate actPictura = new Activitate("Pictura", profDesen);
+
+        scoala.adaugaActivitate("Programare", actProgramare);
+        scoala.adaugaActivitate("Fotbal", actFotbal);
+        scoala.adaugaActivitate("Cor", actCor);
+        scoala.adaugaActivitate("Pictura", actPictura);
+
+        Elev eExtern = new Elev("Bogdan Teodorescu", Gen.Masculin);
+
+        scoala.inscrieElevInActivitate("Programare", e2);
+        scoala.inscrieElevInActivitate("Programare", e3);
+        scoala.inscrieElevInActivitate("Programare", eExtern);
+
+        scoala.inscrieElevInActivitate("Fotbal", e3);
+        scoala.inscrieElevInActivitate("Fotbal", e5);
+        scoala.inscrieElevInActivitate("Fotbal", e7);
+        scoala.inscrieElevInActivitate("Fotbal", eExtern);
+
+        scoala.inscrieElevInActivitate("Cor", e2);
+        scoala.inscrieElevInActivitate("Cor", e6);
+
+        scoala.inscrieElevInActivitate("Pictura", e6);
+
+        scoala.afiseazaTopActivitati();
+        System.out.println();
+        System.out.println("Numar elevi care participa la cel putin o activitate: " + scoala.getNumarEleviCuActivitati());
+        System.out.println();
+
+        System.out.println("-> Eliminam elevul Andrei Radu din activitatea Fotbal...");
+        scoala.eliminaElevDinActivitate("Fotbal", e3);
+
+        System.out.println("-> Eliminam activitatea Pictura din scoala...");
+        scoala.eliminaActivitate("Pictura");
+        System.out.println();
+
+        scoala.afiseazaTopActivitati();
+        System.out.println();
+
+        System.out.println("Numar final de elevi care participa la cel putin o activitate: " + scoala.getNumarEleviCuActivitati());
     }
 }
