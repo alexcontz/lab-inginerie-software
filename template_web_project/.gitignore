@@ -1,0 +1,56 @@
+# Build, cache, and generated directories
+.gradle/
+.gradletasknamecache
+build/
+out/
+dist/
+target/
+bin/
+generated/
+.apt_generated/
+.factorypath
+
+# Compiled Java artifacts and archives
+*.class
+*.jar
+!gradle/wrapper/gradle-wrapper.jar
+*.war
+*.ear
+*.nar
+*.zip
+*.tar.gz
+
+# JVM crash dumps & temporary logs
+hs_err_pid*
+replay_pid*
+.attach_pid*
+*.log
+*.tmp
+*.temp
+
+# IntelliJ IDEA workspace & user-specific settings
+.idea/workspace.xml
+.idea/tasks.xml
+.idea/usage.statistics.xml
+.idea/shelf/
+.idea/dataSources/
+.idea/dataSources.local.xml
+.idea/httpRequests/
+.idea/queries/
+.idea/caches/
+*.iws
+*.iml
+
+# Track shared IntelliJ run configurations
+!.idea/runConfigurations/
+!.idea/runConfigurations/*
+
+# Operating System files
+.DS_Store
+Thumbs.db
+
+# Environment configuration (keep .env.template tracked)
+.env
+.env.local
+.env.*.local
+!.env.template

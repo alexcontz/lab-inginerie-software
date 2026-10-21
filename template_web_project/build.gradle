@@ -1,0 +1,255 @@
+import java.nio.file.Files
+
+plugins {
+    id 'war'
+}
+
+layout.buildDirectory.set(file('out'))
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Jakarta EE 11 API (compileOnly since GlassFish provides the runtime implementation)
+    compileOnly 'jakarta.platform:jakarta.jakartaee-api:11.0.0'
+}
+
+// -----------------------------------------------------------------------------
+// Environment Configuration Loader (.env / .env.template)
+// -----------------------------------------------------------------------------
+
+def loadEnvFile(File envFile) {
+    def envMap = [:]
+    if (envFile != null && envFile.exists() && envFile.isFile()) {
+        envFile.eachLine { rawLine ->
+            def line = rawLine.trim()
+            if (line && !line.startsWith('#')) {
+                def sep = line.indexOf('=')
+                if (sep > 0) {
+                    def key = line.substring(0, sep).trim()
+                    def val = line.substring(sep + 1).trim()
+                    if ((val.startsWith('"') && val.endsWith('"')) || (val.startsWith("'") && val.endsWith("'"))) {
+                        val = val.substring(1, val.length() - 1)
+                    } else {
+                        def hashIdx = val.indexOf('#')
+                        if (hashIdx >= 0) {
+                            val = val.substring(0, hashIdx).trim()
+                        }
+                    }
+                    envMap[key] = val
+                }
+            }
+        }
+    }
+    return envMap
+}
+
+def envFile = file('.env')
+def envTemplateFile = file('.env.template')
+
+// If .env does not exist but .env.template is present, auto-bootstrap .env
+if (!envFile.exists() && envTemplateFile.exists()) {
+    Files.copy(envTemplateFile.toPath(), envFile.toPath())
+    logger.lifecycle("ℹ️  Auto-generated .env from .env.template")
+}
+
+def dotEnv = loadEnvFile(envFile)
+def templateEnv = loadEnvFile(envTemplateFile)
+
+// Configuration resolution with hierarchical fallback:
+// 1. Gradle project property (-Pkey=... or -Dkey=...)
+// 2. .env file (developer / user-specific local setting)
+// 3. System environment variable (OS / shell / CI setting)
+// 4. .env.template file (template default)
+// 5. Hardcoded fallback defaultValue
+def getConfig = { String key, String defaultValue = '' ->
+    if (project.hasProperty(key) && project.property(key)?.toString()?.trim()) {
+        return project.property(key).toString().trim()
+    }
+    if (dotEnv.containsKey(key) && dotEnv[key]?.trim()) {
+        return dotEnv[key].trim()
+    }
+    def sysEnv = System.getenv(key)
+    if (sysEnv != null && !sysEnv.trim().isEmpty()) {
+        return sysEnv.trim()
+    }
+    if (templateEnv.containsKey(key) && templateEnv[key]?.trim()) {
+        return templateEnv[key].trim()
+    }
+    return defaultValue
+}
+
+// -----------------------------------------------------------------------------
+// Resolved User / System Configurations
+// -----------------------------------------------------------------------------
+
+def appName = getConfig('APP_NAME', 'webapp')
+def rawContext = getConfig('APP_CONTEXT_PATH', "/${appName}")
+def appContext = rawContext.startsWith('/') ? rawContext : "/${rawContext}"
+
+def httpHost = getConfig('HTTP_HOST', 'localhost')
+def httpPort = getConfig('HTTP_PORT', '8080')
+def adminPort = getConfig('ADMIN_PORT', '4848')
+
+def glassfishHome = getConfig('GLASSFISH_HOME', '/opt/glassfish8')
+def glassfishDomain = getConfig('GLASSFISH_DOMAIN', 'domain1')
+
+// Derived paths if not explicitly configured in .env
+def glassfishDomainsDir = getConfig('GLASSFISH_DOMAINS_DIR', "${glassfishHome}/glassfish/domains")
+def glassfishAutodeployDir = getConfig('GLASSFISH_AUTODEPLOY_DIR', "${glassfishDomainsDir}/${glassfishDomain}/autodeploy")
+def glassfishAsadmin = getConfig('GLASSFISH_ASADMIN', "${glassfishHome}/glassfish/bin/asadmin")
+
+def javaHome = getConfig('JAVA_HOME', '')
+
+// -----------------------------------------------------------------------------
+// WAR & Deployment Tasks
+// -----------------------------------------------------------------------------
+
+sourceSets {
+    main {
+        java {
+            srcDirs = ['src']
+        }
+    }
+}
+
+war {
+    archiveFileName = "${appName}.war"
+    // Serve web resources (such as index.jsp) directly from src/
+    webAppDirectory.set(file('src'))
+    exclude '**/*.java'
+}
+
+tasks.named('wrapper') {
+    gradleVersion = '9.6.0'
+    distributionType = Wrapper.DistributionType.BIN
+    scriptFile = file('gradle/wrapper/gradlew')
+    jarFile = file('gradle/wrapper/gradle-wrapper.jar')
+}
+
+tasks.register('runServer', Exec) {
+    dependsOn 'war'
+    group = 'application'
+    description = 'Kills existing server, autodeploys, and runs in foreground'
+
+    // Expose .env variables to the runtime environment of GlassFish
+    dotEnv.each { k, v ->
+        if (v != null && !v.trim().isEmpty()) {
+            environment k, v
+        }
+    }
+
+    doFirst {
+        // Validate GlassFish installation
+        if (!file(glassfishAsadmin).exists()) {
+            throw new GradleException(
+                "GlassFish 'asadmin' not found at '${glassfishAsadmin}'. " +
+                "Please configure GLASSFISH_HOME in your .env file."
+            )
+        }
+
+        // 1. Stop any existing GlassFish instance at start of runServer
+        def javaPrefix = javaHome ? "export JAVA_HOME='${javaHome}'; export PATH='${javaHome}/bin':\$PATH;\n" : ""
+        def stopServerScript = """
+            ${javaPrefix}
+            if pgrep -f '[G]lassFishMain|[A]sadminMain' >/dev/null 2>&1 || (command -v fuser >/dev/null 2>&1 && fuser ${adminPort}/tcp >/dev/null 2>&1); then
+                echo "🛑 Stopping existing GlassFish instance before start..."
+                "${glassfishAsadmin}" stop-domain "${glassfishDomain}" 2>/dev/null || true
+                if command -v fuser >/dev/null 2>&1; then
+                    fuser -k -9 ${adminPort}/tcp ${httpPort}/tcp 2>/dev/null || true
+                fi
+                pkill -9 -f '[G]lassFishMain|[A]sadminMain' 2>/dev/null || true
+                sleep 1
+            fi
+        """
+        new ProcessBuilder('bash', '-c', stopServerScript).inheritIO().start().waitFor()
+
+        // 2. Ensure autodeploy directory exists
+        file(glassfishAutodeployDir).mkdirs()
+
+        // 3. Deploy the war archive
+        copy {
+            from tasks.named('war')
+            into glassfishAutodeployDir
+        }
+
+        // Print connection information (Open on: http://localhost:8080/webapp/index.jsp)
+        println ""
+        println "========================================================="
+        println "🚀 Starting GlassFish Server..."
+        println "🔗 WebApp (JSP):  http://${httpHost}:${httpPort}${appContext}/index.jsp"
+        println "🔗 Base URL:      http://${httpHost}:${httpPort}${appContext}/"
+        println "🔗 Admin Console: http://${httpHost}:${adminPort}/"
+        println "📁 Deploy Dir:    ${glassfishAutodeployDir}"
+        println "========================================================="
+        println ""
+    }
+
+    def javaPrefix = javaHome ? "export JAVA_HOME='${javaHome}'; export PATH='${javaHome}/bin':\$PATH;\n" : ""
+    commandLine 'bash', '-c', """
+        ${javaPrefix}
+        cleanup() {
+            local sig="\$1"
+            trap - SIGINT SIGTERM EXIT
+            echo ""
+            echo "🛑 Shutting down GlassFish server (${glassfishDomain})..."
+            "${glassfishAsadmin}" stop-domain "${glassfishDomain}" 2>/dev/null || true
+            if command -v fuser >/dev/null 2>&1; then
+                fuser -k -9 "${adminPort}/tcp" "${httpPort}/tcp" 2>/dev/null || true
+            fi
+            pkill -9 -f '[G]lassFishMain|[A]sadminMain' 2>/dev/null || true
+            if [ "\$sig" = "SIGINT" ] || [ "\$sig" = "SIGTERM" ]; then
+                exit 0
+            fi
+        }
+
+        trap 'cleanup SIGINT' SIGINT
+        trap 'cleanup SIGTERM' SIGTERM
+        trap 'cleanup EXIT' EXIT
+
+        # Pre-execution fallback check: ensure ports are clean
+        if pgrep -f '[G]lassFishMain|[A]sadminMain' >/dev/null 2>&1 || (command -v fuser >/dev/null 2>&1 && fuser "${adminPort}/tcp" >/dev/null 2>&1); then
+            "${glassfishAsadmin}" stop-domain "${glassfishDomain}" 2>/dev/null || true
+            if command -v fuser >/dev/null 2>&1; then
+                fuser -k -9 "${adminPort}/tcp" "${httpPort}/tcp" 2>/dev/null || true
+            fi
+            pkill -9 -f '[G]lassFishMain|[A]sadminMain' 2>/dev/null || true
+            sleep 1
+        fi
+
+        "${glassfishAsadmin}" start-domain --verbose "${glassfishDomain}" &
+        GF_PID=\$!
+        wait \$GF_PID
+        EXIT_CODE=\$?
+        exit \$EXIT_CODE
+    """
+}
+
+tasks.register('hotReload', Copy) {
+    dependsOn 'war'
+    group = 'application'
+    description = 'Pushes code changes to the running server without restarting'
+
+    from tasks.named('war')
+    into glassfishAutodeployDir
+
+    doFirst {
+        if (!file(glassfishAutodeployDir).exists()) {
+            file(glassfishAutodeployDir).mkdirs()
+        }
+    }
+
+    doLast {
+        // Print connection information (Open on: http://localhost:8080/webapp/index.jsp)
+        println ""
+        println "========================================================="
+        println "⚡ Hot Reload Complete!"
+        println "🔗 WebApp (JSP):  http://${httpHost}:${httpPort}${appContext}/index.jsp"
+        println "🔗 Base URL:      http://${httpHost}:${httpPort}${appContext}/"
+        println "🔗 Admin Console: http://${httpHost}:${adminPort}/"
+        println "📁 Deploy Dir:    ${glassfishAutodeployDir}"
+        println "========================================================="
+        println ""
+    }
+}
