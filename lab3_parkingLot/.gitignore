@@ -1,3 +1,5 @@
+.doc/
+
 # Build, cache, and generated directories
 .gradle/
 .gradletasknamecache

@@ -1,19 +1,24 @@
-# Parking Lot Web Application (`lab3_parkingLot`)
+# Parking Lot 2 Web Application (`lab3_parkingLot`)
 
 > [!NOTE]
 > This repository is made for school (Software Engineering laboratory / academic coursework).
 
-A Jakarta EE 11 web application running on Eclipse GlassFish 8, demonstrating modular JSP development with reusable tag templates and page navigation.
+A Jakarta EE 11 web application running on Eclipse GlassFish 8, introducing Jakarta Servlets, Bootstrap 5 UI integration, and modular view components.
 
 ---
 
 ## ✨ Features
 
-- **JSP UI Templating:** Base layout defined in `src/WEB-INF/tags/pageTemplate.tag` with dynamic `${pageTitle}` and body insertion via `<jsp:doBody/>`.
-- **Multi-Page Layout:**
-  - **Home / Welcome:** `src/index.jsp` (`Welcome to the Parking Lot`).
-  - **About:** `src/about.jsp` (`About Parking Lot`).
-- **Container & Tooling:** Runs on Eclipse GlassFish 8 and OpenJDK 21, managed via a Gradle wrapper with automated deployment and hot-reloading tasks.
+- **Jakarta Servlets:** Implements the `Cars` servlet (`@WebServlet(name = "Cars", value = "/Cars")`) forwarding data attributes (e.g. `numberOfFreeParkingSpots`) to protected views.
+- **Bootstrap 5 UI:** Integrated Bootstrap 5.3.3 styling into `src/WEB-INF/tags/pageTemplate.tag`.
+- **Reusable View Components:**
+  - **Navigation Bar:** `src/WEB-INF/pages/menu.jsp` (fixed-top responsive dark navbar with dynamic active page highlighting).
+  - **Footer:** `src/WEB-INF/pages/footer.jsp` (consistent centered footer).
+- **Internal & Public Pages:**
+  - **Cars Page:** `src/WEB-INF/pages/cars.jsp` (grid listing cars, parking spots, users, and available spot counter).
+  - **Welcome Page:** `src/index.jsp`.
+  - **About Page:** `src/about.jsp`.
+- **Container & Tooling:** Runs on Eclipse GlassFish 8 and OpenJDK 21, managed via a Gradle wrapper with automated deployment, hot reload, and `.env` configuration.
 
 ---
 
@@ -93,6 +98,7 @@ Once the server is running (default port `8080` and context `/webapp`):
 | :--- | :--- |
 | **Welcome Page** | [http://localhost:8080/webapp/index.jsp](http://localhost:8080/webapp/index.jsp) |
 | **About Page** | [http://localhost:8080/webapp/about.jsp](http://localhost:8080/webapp/about.jsp) |
+| **Cars Page (Servlet)** | [http://localhost:8080/webapp/Cars](http://localhost:8080/webapp/Cars) |
 | **Base URL** | [http://localhost:8080/webapp/](http://localhost:8080/webapp/) |
 | **GlassFish Admin Console** | [http://localhost:4848/](http://localhost:4848/) |
 
@@ -108,8 +114,14 @@ lab3_parkingLot/
 ├── gradle/wrapper/                           # Gradle wrapper files
 ├── src/
 │   ├── WEB-INF/
+│   │   ├── pages/
+│   │   │   ├── cars.jsp                      # Protected Cars view
+│   │   │   ├── footer.jsp                    # Footer component
+│   │   │   └── menu.jsp                      # Responsive Bootstrap navbar
 │   │   └── tags/
-│   │       └── pageTemplate.tag              # Base HTML layout tag template
+│   │       └── pageTemplate.tag              # Base Bootstrap template tag
+│   ├── com/parking/parkinglot/servlets/
+│   │   └── Cars.java                         # Jakarta EE Servlet (/Cars)
 │   ├── about.jsp                             # About page
 │   └── index.jsp                             # Welcome page
 ├── build.gradle                              # Gradle build script with lifecycle tasks
