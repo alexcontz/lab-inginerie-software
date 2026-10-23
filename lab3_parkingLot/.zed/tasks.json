@@ -1,0 +1,29 @@
+[
+  {
+    "label": "Run Server",
+    "command": "./gradle/wrapper/gradlew",
+    "args": ["runServer"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "Hot Reload",
+    "command": "./gradle/wrapper/gradlew",
+    "args": ["hotReload"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  },
+  {
+    "label": "Gradle Build",
+    "command": "./gradle/wrapper/gradlew",
+    "args": ["build"],
+    "cwd": "$ZED_WORKTREE_ROOT",
+    "use_new_terminal": false,
+    "allow_concurrent_runs": false,
+    "reveal": "always"
+  }
+]
